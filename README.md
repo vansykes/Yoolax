@@ -1,6 +1,3 @@
-IKEA
+Yoolax Shades Device Handler for SmartThings
 
-Repository of my smartthings device handlers for IKEA Devices. Created them primarily for my own use but you are free to use if you so wish, no warranty or guarantees implied or otherwise.
-
-Information https://community.smartthings.com/t/release-ikea-fyrtur-window-blinds/171955
-
+A device handler based on the Ikea Window Blinds handler by a4refillpad tweaked to work better with Yoolax brand shades.

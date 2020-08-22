@@ -16,7 +16,7 @@
 import physicalgraph.zigbee.zcl.DataType
 
 metadata {
-    definition(name: "IKEA Window Blinds", namespace: "a4refillpad", author: "Wayne Man", ocfDeviceType: "oic.d.blind", mnmn: "SmartThings", vid: "generic-shade") {
+    definition(name: "Yoolax Shades Handler 1", namespace: "thx1200", author: "Timothy Carroll", cstHandler: true) {
         capability "Actuator"
         capability "Configuration"
         capability "Refresh"
@@ -37,11 +37,11 @@ metadata {
     tiles(scale: 2) {
         multiAttributeTile(name:"windowShade", type: "generic", width: 6, height: 4) {
             tileAttribute("device.windowShade", key: "PRIMARY_CONTROL") {
+                attributeState "opening", label: 'Opening', action: "pause", icon: "st.thermostat.thermostat-up", backgroundColor: "#e86d13", nextState: "partially open"
+                attributeState "closing", label: 'Closing', action: "pause", icon: "st.thermostat.thermostat-down", backgroundColor: "#00A0DC", nextState: "partially open"
                 attributeState "open", label: 'Open', action: "close", icon: "https://raw.githubusercontent.com/a4refillpad/media/master/blind-open.png", backgroundColor: "#e86d13", nextState: "closing"
                 attributeState "closed", label: 'Closed', action: "open", icon: "https://raw.githubusercontent.com/a4refillpad/media/master/blind-closed.png", backgroundColor: "#00A0DC", nextState: "opening"
                 attributeState "partially open", label: 'Partially open', action: "close", icon: "https://raw.githubusercontent.com/a4refillpad/media/master/blind-part-open.png", backgroundColor: "#d45614", nextState: "closing"
-                attributeState "opening", label: 'Opening', action: "pause", icon: "st.thermostat.thermostat-up", backgroundColor: "#e86d13", nextState: "partially open"
-                attributeState "closing", label: 'Closing', action: "pause", icon: "st.thermostat.thermostat-down", backgroundColor: "#00A0DC", nextState: "partially open"
             }
             tileAttribute("device.lastCheckin", key: "SECONDARY_CONTROL") {
                 attributeState("default", label:'Last Update: ${currentValue}',icon: "st.Health & Wellness.health9")
@@ -65,8 +65,8 @@ metadata {
 		standardTile("resetOpen", "device.windowShade", inactiveLabel: false, decoration: "flat", width: 3, height: 1) {
 			state "default", action:"open", label: "Open", icon:"https://raw.githubusercontent.com/a4refillpad/media/master/blind-open.png"
 	  	}
- 		valueTile("battery", "device.battery", decoration: "flat", inactiveLabel: false, width: 2, height: 2) {
-			state "battery", label:'${currentValue}% battery', unit:""
+ 		valueTile("battery", "device.battery", decoration: "flat", width: 2, height: 2) {
+			state "battery", label:'${currentValue}% Battery', unit:"%"
 		}
 
         main "windowShade"
@@ -83,6 +83,24 @@ private getCOMMAND_GOTO_LIFT_PERCENTAGE() { 0x05 }
 private getATTRIBUTE_POSITION_LIFT() { 0x0008 }
 private getATTRIBUTE_CURRENT_LEVEL() { 0x0000 }
 private getCOMMAND_MOVE_LEVEL_ONOFF() { 0x04 }
+
+def installed() {
+	log.info "----------- installed()"
+    initialize()
+}
+
+def updated() {
+	log.info "----------- updated()"
+    unsubscribe()
+    initialize()
+}
+
+def initialize() {
+    state.lastDirection = 0
+    state.lastLevel = 0
+    state.targetLevel = -999
+    log.info "----------- initialize()"
+}
 
 private List<Map> collectAttributes(Map descMap) {
 	List<Map> descMaps = new ArrayList<Map>()
@@ -114,65 +132,116 @@ def parse(String description) {
             }
         } 
         if (descMap?.clusterInt == CLUSTER_BATTERY_LEVEL && descMap.value) {
-            log.debug "attr: ${descMap?.attrInt}, value: ${descMap?.value}, descValue: ${Integer.parseInt(descMap.value, 16)}"
-            sendEvent(name: "battery", value: Integer.parseInt(descMap.value, 16))
+            log.debug "attr: ${descMap?.attrInt}, value: ${descMap?.value}, descValue: ${Integer.parseInt(descMap.value, 16).intdiv(2)}"
+            sendEvent(name: "battery", value: Integer.parseInt(descMap.value, 16).intdiv(2), unit: "%", isStateChange: false)
         }
     }
-}
-
-def levelEventHandler(currentLevel) {
-    def lastLevel = device.currentValue("level")
-    log.debug "levelEventHandle - currentLevel: ${currentLevel} lastLevel: ${lastLevel}"
-    if (lastLevel == "undefined" || currentLevel == lastLevel) { //Ignore invalid reports
-        log.debug "Ignore invalid reports"
-    } else {
-        sendEvent(name: "level", value: currentLevel)
-        if (currentLevel == 0 || currentLevel == 100) {
-            sendEvent(name: "windowShade", value: currentLevel == 0 ? "closed" : "open")
-        } else {
-            if (lastLevel < currentLevel) {
-                sendEvent([name:"windowShade", value: "opening"])
-            } else if (lastLevel > currentLevel) {
-                sendEvent([name:"windowShade", value: "closing"])
-            }
-            runIn(3, "updateFinalState", [overwrite:true])
-        }
-    }
+    
     runIn(3, "updateFinalState", [overwrite:true])
 }
 
+// Events can and do come in badly out of order with this device, probably because it sends single digit updates over the mesh network.  With some clever "debouncing" we can try to get around this, but even then sometimes the methods fire within current execution.  It seems to work fairly well in practice.
+def levelEventHandler(currentLevel) {
+    log.debug "levelEventHandle - currentLevel: ${currentLevel} targetlevel: ${state.targetLevel}"
+
+    if (state.lastDirection < -2) { 
+    	state.lastDirection = -2 
+	} else if (state.lastDirection > 2) { 
+    	state.lastDirection = 2 
+    }
+
+    if (currentLevel <= 0) {
+        log.debug "levelEventHandle - state: closed"
+        sendEvent(name: "windowShade", value: "closed")
+    } else if (currentLevel >= 100) {
+        log.debug "levelEventHandle - state: open"
+        sendEvent(name: "windowShade", value: "open")
+    } else if (currentLevel == targetlevel) {
+        log.debug "levelEventHandle - state: partially open"
+        sendEvent(name: "windowShade", value: "partially open")
+    } else if (currentLevel < state.lastLevel) {
+    	if (state.lastDirection <= 0) {
+            log.debug "levelEventHandle - state: closing (${state.lastDirection})"
+            sendEvent(name:"windowShade", value: "closing")
+        } else {
+        	log.debug "levelEventHandle - state: closing -debounce- (${state.lastDirection})"
+        }
+        state.lastDirection = state.lastDirection - 1
+    } else if (currentLevel > state.lastLevel) {
+    	if (state.lastDirection >= 0) {
+            log.debug "levelEventHandle - state: opening (${state.lastDirection})"
+            sendEvent(name:"windowShade", value: "opening")
+        } else {
+        	log.debug "levelEventHandle - state: opening -debounce- (${state.lastDirection})"
+        }
+        state.lastDirection = state.lastDirection + 1
+    }
+
+	log.debug "lastDirection ${state.lastDirection}"
+
+	state.lastLevel = currentLevel
+}
+
 def updateFinalState() {
-    def level = device.currentValue("level")
-    log.debug "updateFinalState: ${level}"
-    if (level > 0 && level < 100) {
+	log.debug "updateFinalState: targetlevel: ${state.targetLevel}, lastlevel: ${state.lastLevel}"
+
+	def targetlevel = nearestFive(state.lastLevel)
+	if (state.targetLevel >= 0 && state.targetLevel <= 100 && Math.abs(state.targetLevel - state.lastLevel) < 5) {
+    	log.debug "updateFinalState: using targetlevel value"
+    	targetlevel = state.targetLevel
+    } else {
+        log.debug "updateFinalState: using lastLevel value"
+	}
+    
+    sendEvent(name: "level", value: targetlevel)
+    log.debug "updateFinalState: level: ${targetlevel}"
+    
+    if (targetlevel <= 0) {
+	    log.debug "updateFinalState - state: closed"
+    	sendEvent(name: "windowShade", value: "closed")
+    } else if (targetlevel >= 100) {
+	    log.debug "updateFinalState - state: open"
+    	sendEvent(name: "windowShade", value: "open")
+    } else {
+	    log.debug "updateFinalState - state: partially open"
         sendEvent(name: "windowShade", value: "partially open")
     }
+    
+   	state.lastDirection = 0
+    state.targetLevel = -999
 }
 
 def close() {
     log.info "close()"
-    zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_CLOSE)
-
+    setLevel(0)
 }
 
 def open() {
     log.info "open()"
-    zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_OPEN)
+    setLevel(100)
 }
 
 def setLevel(data, rate = null) {
-    data = data.toInteger()
-    log.info "setLevel()"
-    def cmd
-    cmd = zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_GOTO_LIFT_PERCENTAGE, zigbee.convertToHexString(100 - data, 2))
+    data = nearestFive(data).toInteger()
+    log.info "setLevel ${data}"
 
+   	state.lastDirection = 0
+    state.targetLevel = data
+    sendEvent(name: "level", value: data)
+
+	def cmd
+    cmd = zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_GOTO_LIFT_PERCENTAGE, zigbee.convertToHexString(100 - data, 2))
 
     return cmd
 }
 
 def pause() {
     log.info "pause()"
-    zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_PAUSE)
+    setLevel(state.lastLevel)
+}
+
+def nearestFive(val) {
+	return 5 * (Math.round(val/5))
 }
 
 /**
@@ -180,14 +249,19 @@ def pause() {
  * */
 
 def ping() {
-    return zigbee.readAttribute(CLUSTER_BATTERY_LEVEL, 0x0021) // Read the Battery Level
+	log.info "ping()"
+    
+	def cmds = zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_POSITION_LIFT) + zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_CURRENT_LEVEL) + zigbee.readAttribute(CLUSTER_BATTERY_LEVEL, 0x0021) 
+    return cmds
 }
 
 def refresh() {
     log.info "refresh()"
     
     def cmds
-    cmds = zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_POSITION_LIFT) + zigbee.readAttribute(CLUSTER_BATTERY_LEVEL, 0x0021) 
+    cmds = zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_POSITION_LIFT) + zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_CURRENT_LEVEL) + zigbee.readAttribute(CLUSTER_BATTERY_LEVEL, 0x0021) 
+
+	runIn(3, "updateFinalState", [overwrite:true])
 
     return cmds
 }
