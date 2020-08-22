@@ -202,7 +202,7 @@ def updateFinalState() {
 		sendEvent(name: "windowShade", value: "open")
 	} else {
 		log.debug "updateFinalState - state: partially open"
-			sendEvent(name: "windowShade", value: "partially open")
+		sendEvent(name: "windowShade", value: "partially open")
 	}
 	
 	state.lastDirection = 0
