@@ -84,7 +84,7 @@ private getCOMMAND_MOVE_LEVEL_ONOFF() { 0x04 }
 
 def installed() {
 	log.info "----------- installed()"
-  initialize()
+	initialize()
 }
 
 def updated() {
@@ -116,7 +116,7 @@ private List<Map> collectAttributes(Map descMap) {
 def parse(String description) {
 	log.debug "description:- ${description}"
 	def now = new Date().format("yyyy MMM dd EEE h:mm:ss a", location.timeZone)
-	//  send event for heartbeat    
+	//	send event for heartbeat		
 	sendEvent(name: "lastCheckin", value: now)
 	if (description?.startsWith("read attr -")) {
 		Map descMap = zigbee.parseDescriptionAsMap(description)
@@ -138,15 +138,15 @@ def parse(String description) {
 	runIn(3, "updateFinalState", [overwrite:true])
 }
 
-// Events can and do come in badly out of order with this device, probably because it sends single digit updates over the mesh network.  With some clever "debouncing" we can try to get around this, but even then sometimes the methods fire within current execution.  It seems to work fairly well in practice.
+// Events can and do come in badly out of order with this device, probably because it sends single digit updates over the mesh network.	With some clever "debouncing" we can try to get around this, but even then sometimes the methods fire within current execution.	It seems to work fairly well in practice.
 def levelEventHandler(currentLevel) {
-  log.debug "levelEventHandle - currentLevel: ${currentLevel} targetlevel: ${state.targetLevel}"
+	log.debug "levelEventHandle - currentLevel: ${currentLevel} targetlevel: ${state.targetLevel}"
 
-  if (state.lastDirection < -2) { 
-   	state.lastDirection = -2 
+	if (state.lastDirection < -2) { 
+		state.lastDirection = -2 
 	} else if (state.lastDirection > 2) { 
-   	state.lastDirection = 2 
-  }
+		state.lastDirection = 2 
+	}
 
 	if (currentLevel <= 0) {
 		log.debug "levelEventHandle - state: closed"
@@ -190,7 +190,7 @@ def updateFinalState() {
 	} else {
 		log.debug "updateFinalState: using lastLevel value"
 	}
-    
+		
 	sendEvent(name: "level", value: targetlevel)
 	log.debug "updateFinalState: level: ${targetlevel}"
 	
@@ -228,9 +228,9 @@ def setLevel(data, rate = null) {
 	sendEvent(name: "level", value: data)
 
 	def cmd
-  cmd = zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_GOTO_LIFT_PERCENTAGE, zigbee.convertToHexString(100 - data, 2))
+	cmd = zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_GOTO_LIFT_PERCENTAGE, zigbee.convertToHexString(100 - data, 2))
 
-  return cmd
+	return cmd
 }
 
 def pause() {
@@ -248,9 +248,9 @@ def nearestFive(val) {
 
 def ping() {
 	log.info "ping()"
-    
+		
 	def cmds = zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_POSITION_LIFT) + zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_CURRENT_LEVEL) + zigbee.readAttribute(CLUSTER_BATTERY_LEVEL, 0x0021) 
-  return cmds
+	return cmds
 }
 
 def refresh() {
@@ -261,7 +261,7 @@ def refresh() {
 
 	runIn(3, "updateFinalState", [overwrite:true])
 
-  return cmds
+	return cmds
 }
 
 def configure() {
