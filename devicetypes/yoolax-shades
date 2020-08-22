@@ -125,8 +125,8 @@ def parse(String description) {
 			List<Map> descMaps = collectAttributes(descMap)
 			def liftmap = descMaps.find { it.attrInt == ATTRIBUTE_POSITION_LIFT }
 			if (liftmap && liftmap.value) {
-					def newLevel = 100 - zigbee.convertHexToInt(liftmap.value)
-					levelEventHandler(newLevel)
+				def newLevel = 100 - zigbee.convertHexToInt(liftmap.value)
+				levelEventHandler(newLevel)
 			}
 		} 
 		if (descMap?.clusterInt == CLUSTER_BATTERY_LEVEL && descMap.value) {
