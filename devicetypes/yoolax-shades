@@ -1,5 +1,6 @@
 /**
  *
+ *	Copyright 2019 SmartThings
  *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *	in compliance with the License. You may obtain a copy of the License at:
@@ -9,70 +10,66 @@
  *	Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
- *
  */
+import groovy.json.JsonOutput
 import physicalgraph.zigbee.zcl.DataType
 
 metadata {
-	definition(name: "Yoolax Shades Handler 1", namespace: "thx1200", author: "Timothy Carroll", cstHandler: true) {
+	definition(name: "ORVIBO Window Shades", namespace: "avianwaves", author: "AvianWaves", ocfDeviceType: "oic.d.blind", mnmn: "SmartThings", vid: "generic-shade-3") {
 		capability "Actuator"
+		capability "Battery"
 		capability "Configuration"
 		capability "Refresh"
 		capability "Window Shade"
+		capability "Window Shade Preset"
 		capability "Health Check"
 		capability "Switch Level"
-		capability "Battery"
 
 		command "pause"
-		
-		attribute "lastCheckin", "String"
-		attribute "lastOpened", "String"
 
-		fingerprint inClusters: "0000,0001,0003,0004", manufacturer: "IKEA of Sweden", model: "FYRTUR block-out roller blind"
+		fingerprint manufacturer: "IKEA of Sweden", model: "KADRILJ roller blind", deviceJoinName: "IKEA Window Treatment" // raw description 01 0104 0202 00 09 0000 0001 0003 0004 0005 0020 0102 1000 FC7C 02 0019 1000 //IKEA KADRILJ Blinds
+		fingerprint manufacturer: "IKEA of Sweden", model: "FYRTUR block-out roller blind", deviceJoinName: "IKEA Window Treatment" // raw description 01 0104 0202 01 09 0000 0001 0003 0004 0005 0020 0102 1000 FC7C 02 0019 1000 //IKEA FYRTUR Blinds
+        fingerprint manufacturer: "ORVIBO", model: "Window Treatment", deviceJoinName: "ORVIBO Window Treatment" 
 	}
 
+	preferences {
+		input "preset", "number", title: "Preset position", description: "Set the window shade preset position", defaultValue: 50, range: "1..100", required: false, displayDuringSetup: false
+	}
 
 	tiles(scale: 2) {
 		multiAttributeTile(name:"windowShade", type: "generic", width: 6, height: 4) {
 			tileAttribute("device.windowShade", key: "PRIMARY_CONTROL") {
-				attributeState "opening", label: 'Opening', action: "pause", icon: "st.thermostat.thermostat-up", backgroundColor: "#e86d13", nextState: "partially open"
-				attributeState "closing", label: 'Closing', action: "pause", icon: "st.thermostat.thermostat-down", backgroundColor: "#00A0DC", nextState: "partially open"
-				attributeState "open", label: 'Open', action: "close", icon: "https://raw.githubusercontent.com/a4refillpad/media/master/blind-open.png", backgroundColor: "#e86d13", nextState: "closing"
-				attributeState "closed", label: 'Closed', action: "open", icon: "https://raw.githubusercontent.com/a4refillpad/media/master/blind-closed.png", backgroundColor: "#00A0DC", nextState: "opening"
-				attributeState "partially open", label: 'Partially open', action: "close", icon: "https://raw.githubusercontent.com/a4refillpad/media/master/blind-part-open.png", backgroundColor: "#d45614", nextState: "closing"
-			}
-			tileAttribute("device.lastCheckin", key: "SECONDARY_CONTROL") {
-				attributeState("default", label:'Last Update: ${currentValue}',icon: "st.Health & Wellness.health9")
+				attributeState "open", label: 'Open', action: "close", icon: "http://www.ezex.co.kr/img/st/window_open.png", backgroundColor: "#00A0DC", nextState: "closing"
+				attributeState "closed", label: 'Closed', action: "open", icon: "http://www.ezex.co.kr/img/st/window_close.png", backgroundColor: "#ffffff", nextState: "opening"
+				attributeState "partially open", label: 'Partially open', action: "close", icon: "http://www.ezex.co.kr/img/st/window_open.png", backgroundColor: "#d45614", nextState: "closing"
+				attributeState "opening", label: 'Opening', action: "pause", icon: "http://www.ezex.co.kr/img/st/window_open.png", backgroundColor: "#00A0DC", nextState: "partially open"
+				attributeState "closing", label: 'Closing', action: "pause", icon: "http://www.ezex.co.kr/img/st/window_close.png", backgroundColor: "#ffffff", nextState: "partially open"
 			}
 		}
 		standardTile("contPause", "device.switch", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
-			state "pause", label:"", icon:'st.sonos.stop-btn', action:'pause', backgroundColor:"#cccccc"
+			state "pause", label:"", icon:'st.sonos.pause-btn', action:'pause', backgroundColor:"#cccccc"
 		}
-		standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
+		standardTile("presetPosition", "device.presetPosition", width: 2, height: 2, decoration: "flat") {
+			state "default", label: "Preset", action:"presetPosition", icon:"st.Home.home2"
+		}
+		standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat", width: 2, height: 1) {
 			state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
 		}
-		valueTile("shadeLevel", "device.level", width: 3, height: 1) {
-			state "level", label: 'Blind is ${currentValue}% open', defaultState: true
+		valueTile("shadeLevel", "device.level", width: 4, height: 1) {
+			state "level", label: 'Shade is ${currentValue}% up', defaultState: true
 		}
-		controlTile("levelSliderControl", "device.level", "slider", width:3, height: 1, inactiveLabel: false) {
+		valueTile("batteryLevel", "device.battery", width: 2, height: 2) {
+			state "battery", label:'${currentValue}% battery', unit:""
+		}
+		controlTile("levelSliderControl", "device.level", "slider", width:2, height: 1, inactiveLabel: false) {
 			state "level", action:"switch level.setLevel"
-		}
-		standardTile("resetClosed", "device.windowShade", inactiveLabel: false, decoration: "flat", width: 3, height: 1) {
-			state "default", action:"close", label: "Close", icon:"https://raw.githubusercontent.com/a4refillpad/media/master/blind-closed.png"
-		}
-		standardTile("resetOpen", "device.windowShade", inactiveLabel: false, decoration: "flat", width: 3, height: 1) {
-			state "default", action:"open", label: "Open", icon:"https://raw.githubusercontent.com/a4refillpad/media/master/blind-open.png"
-		}
-		valueTile("battery", "device.battery", decoration: "flat", width: 2, height: 2) {
-			state "battery", label:'${currentValue}% Battery', unit:"%"
 		}
 
 		main "windowShade"
-		details(["windowShade", "shadeLevel", "levelSliderControl", "contPause", "battery", "refresh", "resetClosed", "resetOpen"])
+		details(["windowShade", "contPause", "presetPosition", "shadeLevel", "levelSliderControl", "refresh", "batteryLevel"])
 	}
 }
 
-private getCLUSTER_BATTERY_LEVEL() { 0x0001 }
 private getCLUSTER_WINDOW_COVERING() { 0x0102 }
 private getCOMMAND_OPEN() { 0x00 }
 private getCOMMAND_CLOSE() { 0x01 }
@@ -81,24 +78,7 @@ private getCOMMAND_GOTO_LIFT_PERCENTAGE() { 0x05 }
 private getATTRIBUTE_POSITION_LIFT() { 0x0008 }
 private getATTRIBUTE_CURRENT_LEVEL() { 0x0000 }
 private getCOMMAND_MOVE_LEVEL_ONOFF() { 0x04 }
-
-def installed() {
-	log.info "----------- installed()"
-	initialize()
-}
-
-def updated() {
-	log.info "----------- updated()"
-	unsubscribe()
-	initialize()
-}
-
-def initialize() {
-	state.lastDirection = 0
-	state.lastLevel = 0
-	state.targetLevel = -999
-	log.info "----------- initialize()"
-}
+private getBATTERY_PERCENTAGE_REMAINING() { 0x0021 }
 
 private List<Map> collectAttributes(Map descMap) {
 	List<Map> descMaps = new ArrayList<Map>()
@@ -108,105 +88,82 @@ private List<Map> collectAttributes(Map descMap) {
 	if (descMap.additionalAttrs) {
 		descMaps.addAll(descMap.additionalAttrs)
 	}
-
 	return descMaps
+}
+
+def installed() {
+	log.debug "installed"
+	sendEvent(name: "supportedWindowShadeCommands", value: JsonOutput.toJson(["open", "close", "pause"]))
 }
 
 // Parse incoming device messages to generate events
 def parse(String description) {
 	log.debug "description:- ${description}"
-	def now = new Date().format("yyyy MMM dd EEE h:mm:ss a", location.timeZone)
-	//	send event for heartbeat		
-	sendEvent(name: "lastCheckin", value: now)
 	if (description?.startsWith("read attr -")) {
+	    sendEvent(name: "lastCheckin", value: now)
 		Map descMap = zigbee.parseDescriptionAsMap(description)
-		if (descMap?.clusterInt == CLUSTER_WINDOW_COVERING && descMap.value) {
+		if (isBindingTableMessage(description)) {
+			parseBindingTableMessage(description)
+		} else if (supportsLiftPercentage() && descMap?.clusterInt == CLUSTER_WINDOW_COVERING && descMap.value) {
 			log.debug "attr: ${descMap?.attrInt}, value: ${descMap?.value}, descValue: ${Integer.parseInt(descMap.value, 16)}, ${device.getDataValue("model")}"
 			List<Map> descMaps = collectAttributes(descMap)
 			def liftmap = descMaps.find { it.attrInt == ATTRIBUTE_POSITION_LIFT }
 			if (liftmap && liftmap.value) {
-				def newLevel = 100 - zigbee.convertHexToInt(liftmap.value)
+				def newLevel = zigbee.convertHexToInt(liftmap.value)
+				if (shouldInvertLiftPercentage()) {
+					// some devices report % level of being closed (instead of % level of being opened)
+					// inverting that logic is needed here to avoid a code duplication
+					newLevel = 100 - newLevel
+				}
 				levelEventHandler(newLevel)
 			}
-		} 
-		if (descMap?.clusterInt == CLUSTER_BATTERY_LEVEL && descMap.value) {
-			log.debug "attr: ${descMap?.attrInt}, value: ${descMap?.value}, descValue: ${Integer.parseInt(descMap.value, 16).intdiv(2)}"
-			sendEvent(name: "battery", value: Integer.parseInt(descMap.value, 16).intdiv(2), unit: "%", isStateChange: false)
+		} else if (!supportsLiftPercentage() && descMap?.clusterInt == zigbee.LEVEL_CONTROL_CLUSTER && descMap.value) {
+        	log.debug "Lift Percentage (raw): ${descMap?.value}"
+			def valueInt = Math.round((zigbee.convertHexToInt(descMap.value)) / 255 * 100)
+			levelEventHandler(valueInt)
+		} else if (reportsBatteryPercentage() && descMap?.clusterInt == zigbee.POWER_CONFIGURATION_CLUSTER && zigbee.convertHexToInt(descMap?.attrId) == BATTERY_PERCENTAGE_REMAINING && descMap.value) {
+        	log.debug "Battery (raw): ${descMap?.value}"
+			def batteryLevel = zigbee.convertHexToInt(descMap.value).intdiv(2)
+			batteryPercentageEventHandler(batteryLevel)
 		}
 	}
-	
-	runIn(3, "updateFinalState", [overwrite:true])
 }
 
-// Events can and do come in badly out of order with this device, probably because it sends single digit updates over the mesh network.	With some clever "debouncing" we can try to get around this, but even then sometimes the methods fire within current execution.	It seems to work fairly well in practice.
 def levelEventHandler(currentLevel) {
-	log.debug "levelEventHandle - currentLevel: ${currentLevel} targetlevel: ${state.targetLevel}"
-
-	if (state.lastDirection < -2) { 
-		state.lastDirection = -2 
-	} else if (state.lastDirection > 2) { 
-		state.lastDirection = 2 
-	}
-
-	if (currentLevel <= 0) {
-		log.debug "levelEventHandle - state: closed"
-		sendEvent(name: "windowShade", value: "closed")
-	} else if (currentLevel >= 100) {
-		log.debug "levelEventHandle - state: open"
-		sendEvent(name: "windowShade", value: "open")
-	} else if (currentLevel == targetlevel) {
-		log.debug "levelEventHandle - state: partially open"
-		sendEvent(name: "windowShade", value: "partially open")
-	} else if (currentLevel < state.lastLevel) {
-		if (state.lastDirection <= 0) {
-			log.debug "levelEventHandle - state: closing (${state.lastDirection})"
-			sendEvent(name:"windowShade", value: "closing")
+	def lastLevel = device.currentValue("level")
+	log.debug "levelEventHandle - currentLevel: ${currentLevel} lastLevel: ${lastLevel}"
+	if (lastLevel == "undefined" || currentLevel == lastLevel) { //Ignore invalid reports
+		log.debug "Ignore invalid reports"
+	} else {
+		sendEvent(name: "level", value: currentLevel)
+		if (currentLevel == 0 || currentLevel == 100) {
+			sendEvent(name: "windowShade", value: currentLevel == 0 ? "closed" : "open")
 		} else {
-			log.debug "levelEventHandle - state: closing -debounce- (${state.lastDirection})"
+			if (lastLevel < currentLevel) {
+				sendEvent([name:"windowShade", value: "opening"])
+			} else if (lastLevel > currentLevel) {
+				sendEvent([name:"windowShade", value: "closing"])
+			}
+			runIn(1, "updateFinalState", [overwrite:true])
 		}
-		state.lastDirection = state.lastDirection - 1
-	} else if (currentLevel > state.lastLevel) {
-		if (state.lastDirection >= 0) {
-			log.debug "levelEventHandle - state: opening (${state.lastDirection})"
-			sendEvent(name:"windowShade", value: "opening")
-		} else {
-			log.debug "levelEventHandle - state: opening -debounce- (${state.lastDirection})"
-		}
-		state.lastDirection = state.lastDirection + 1
 	}
-
-	log.debug "lastDirection ${state.lastDirection}"
-
-	state.lastLevel = currentLevel
 }
 
 def updateFinalState() {
-	log.debug "updateFinalState: targetlevel: ${state.targetLevel}, lastlevel: ${state.lastLevel}"
-
-	def targetlevel = nearestFive(state.lastLevel)
-	if (state.targetLevel >= 0 && state.targetLevel <= 100 && Math.abs(state.targetLevel - state.lastLevel) < 5) {
-		log.debug "updateFinalState: using targetlevel value"
-		targetlevel = state.targetLevel
-	} else {
-		log.debug "updateFinalState: using lastLevel value"
-	}
-		
-	sendEvent(name: "level", value: targetlevel)
-	log.debug "updateFinalState: level: ${targetlevel}"
-	
-	if (targetlevel <= 0) {
-		log.debug "updateFinalState - state: closed"
-		sendEvent(name: "windowShade", value: "closed")
-	} else if (targetlevel >= 100) {
-		log.debug "updateFinalState - state: open"
-		sendEvent(name: "windowShade", value: "open")
-	} else {
-		log.debug "updateFinalState - state: partially open"
+	def level = device.currentValue("level")
+	log.debug "updateFinalState: ${level}"
+	if (level > 0 && level < 100) {
 		sendEvent(name: "windowShade", value: "partially open")
 	}
-	
-	state.lastDirection = 0
-	state.targetLevel = -999
+}
+
+def batteryPercentageEventHandler(batteryLevel) {
+	if (batteryLevel != null) {
+    	log.debug "Battery provided level: ${batteryLevel}"
+		batteryLevel = Math.min(100, Math.max(0, batteryLevel))
+        log.debug "Battery min/max level: ${batteryLevel}"
+		sendEvent([name: "battery", value: batteryLevel, unit: "%", descriptionText: "{{ device.displayName }} battery was {{ value }}%"])
+	}
 }
 
 def close() {
@@ -220,58 +177,133 @@ def open() {
 }
 
 def setLevel(data, rate = null) {
-	data = nearestFive(data).toInteger()
-	log.info "setLevel ${data}"
-
-	state.lastDirection = 0
-	state.targetLevel = data
-	sendEvent(name: "level", value: data)
-
+	log.info "setLevel()"
 	def cmd
-	cmd = zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_GOTO_LIFT_PERCENTAGE, zigbee.convertToHexString(100 - data, 2))
-
-	return cmd
+	if (supportsLiftPercentage()) {
+		if (shouldInvertLiftPercentage()) {
+			// some devices keeps % level of being closed (instead of % level of being opened)
+			// inverting that logic is needed here
+			data = 100 - data
+		}
+		cmd = zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_GOTO_LIFT_PERCENTAGE, zigbee.convertToHexString(data, 2))
+	} else {
+		cmd = zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, COMMAND_MOVE_LEVEL_ONOFF, zigbee.convertToHexString(Math.round(data * 255 / 100), 2))
+	}
+	cmd
 }
 
 def pause() {
 	log.info "pause()"
-	setLevel(state.lastLevel)
+	// If the window shade isn't moving when we receive a pause() command then just echo back the current state for the mobile client.
+	if (device.currentValue("windowShade") != "opening" && device.currentValue("windowShade") != "closing") {
+		sendEvent(name: "windowShade", value: device.currentValue("windowShade"), isStateChange: true, displayed: false)
+	}
+	zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_PAUSE)
 }
 
-def nearestFive(val) {
-	return 5 * (Math.round(val/5))
+def presetPosition() {
+    setLevel(preset ?: 50)
 }
 
 /**
  * PING is used by Device-Watch in attempt to reach the Device
  * */
-
 def ping() {
 	log.info "ping()"
-		
-	def cmds = zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_POSITION_LIFT) + zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_CURRENT_LEVEL) + zigbee.readAttribute(CLUSTER_BATTERY_LEVEL, 0x0021) 
-	return cmds
+	return refresh()
 }
 
 def refresh() {
 	log.info "refresh()"
-	
+
 	def cmds
-	cmds = zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_POSITION_LIFT) + zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_CURRENT_LEVEL) + zigbee.readAttribute(CLUSTER_BATTERY_LEVEL, 0x0021) 
-
-	runIn(3, "updateFinalState", [overwrite:true])
-
+	if (supportsLiftPercentage()) {
+		cmds = zigbee.readAttribute(CLUSTER_WINDOW_COVERING, ATTRIBUTE_POSITION_LIFT)
+	} else {
+		cmds = zigbee.readAttribute(zigbee.LEVEL_CONTROL_CLUSTER, ATTRIBUTE_CURRENT_LEVEL)
+	}
+    
+   	if (reportsBatteryPercentage()) {
+		cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, BATTERY_PERCENTAGE_REMAINING)
+	}
+    
+    log.debug "refresh cmd: ${cmds}"
+    
 	return cmds
 }
 
 def configure() {
-	// Device-Watch allows 2 check-in misses from device + ping (plus 2 min lag time)
+	// Device-Watch allows 4 check-in misses from device + ping (plus 2 min lag time)
 	log.info "configure()"
-	sendEvent(name: "checkInterval", value: 2 * 60 * 60 + 2 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
+	sendEvent(name: "checkInterval", value: 4 * 60 * 60 + 2 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
 	log.debug "Configuring Reporting and Bindings."
 
 	def cmds
-	cmds = zigbee.configureReporting(CLUSTER_WINDOW_COVERING, ATTRIBUTE_POSITION_LIFT, DataType.UINT8, 0, 600, null) + zigbee.configureReporting(CLUSTER_BATTERY_LEVEL, 0x0021, DataType.UINT8, 600, 21600, 0x01)
+	if (supportsLiftPercentage()) {
+		cmds = zigbee.configureReporting(CLUSTER_WINDOW_COVERING, ATTRIBUTE_POSITION_LIFT, DataType.UINT8, 2, 600, null)
+	} else {
+		cmds = zigbee.levelConfig()
+	}
+
+	if (usesLocalGroupBinding()) {
+		cmds += readDeviceBindingTable()
+	}
+
+	if (reportsBatteryPercentage()) {
+		cmds += zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, BATTERY_PERCENTAGE_REMAINING, DataType.UINT8, 30, 21600, 0x01)
+	}
 
 	return refresh() + cmds
+}
+
+def usesLocalGroupBinding() {
+	isIkeaKadrilj() || isIkeaFyrtur() || isORVIBO()
+}
+
+private def parseBindingTableMessage(description) {
+	Integer groupAddr = getGroupAddrFromBindingTable(description)
+	if (groupAddr) {
+		List cmds = addHubToGroup(groupAddr)
+		cmds?.collect { new physicalgraph.device.HubAction(it) }
+	}
+}
+
+private Integer getGroupAddrFromBindingTable(description) {
+	log.info "Parsing binding table - '$description'"
+	def btr = zigbee.parseBindingTableResponse(description)
+	def groupEntry = btr?.table_entries?.find { it.dstAddrMode == 1 }
+	log.info "Found ${groupEntry}"
+	!groupEntry?.dstAddr ?: Integer.parseInt(groupEntry.dstAddr, 16)
+}
+
+private List addHubToGroup(Integer groupAddr) {
+	["st cmd 0x0000 0x01 ${CLUSTER_GROUPS} 0x00 {${zigbee.swapEndianHex(zigbee.convertToHexString(groupAddr,4))} 00}", "delay 200"]
+}
+
+private List readDeviceBindingTable() {
+	["zdo mgmt-bind 0x${device.deviceNetworkId} 0", "delay 200"]
+}
+
+def supportsLiftPercentage() {
+	isIkeaKadrilj() || isIkeaFyrtur() || isORVIBO()
+}
+
+def shouldInvertLiftPercentage() {
+	return isIkeaKadrilj() || isIkeaFyrtur() || isORVIBO()
+}
+
+def reportsBatteryPercentage() {
+	return isIkeaKadrilj() || isIkeaFyrtur() || isORVIBO()
+}
+
+def isIkeaKadrilj() {
+	device.getDataValue("model") == "KADRILJ roller blind"
+}
+
+def isIkeaFyrtur() {
+	device.getDataValue("model") == "FYRTUR block-out roller blind"
+}
+
+def isORVIBO() {
+	device.getDataValue("manufacturer") == "ORVIBO"
 }
