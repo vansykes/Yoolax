@@ -122,8 +122,26 @@ def parse(String description) {
 			def valueInt = Math.round((zigbee.convertHexToInt(descMap.value)) / 255 * 100)
 			levelEventHandler(valueInt)
 		} else if (reportsBatteryPercentage() && descMap?.clusterInt == zigbee.POWER_CONFIGURATION_CLUSTER && zigbee.convertHexToInt(descMap?.attrId) == BATTERY_PERCENTAGE_REMAINING && descMap.value) {
-        	log.debug "Battery (raw): ${descMap?.value}"
-			def batteryLevel = zigbee.convertHexToInt(descMap.value).intdiv(2)
+      log.debug "Battery (raw hex): 0x${descMap?.value}"
+			
+			def batteryLevel = zigbee.convertHexToInt(descMap.value)
+			log.debug "Battery (raw dec): ${batteryLevel}"
+			
+			// By testing, battery level is a scale from ~50 to 200.  Not exactly sure what
+			// the lowest level is, so we account for going below zero.  Battery is VERY
+			// low in this case anyway.  Convert this to 0-100 scale.
+			batteryLevel = batteryLevel - 50
+			batteryLevel = batteryLevel * 100
+			batteryLevel = batteryLevel.intdiv(150)
+			
+			log.debug "Battery (converted): ${batteryLevel} percent"
+			
+			if (batteryLevel < 0) { 
+				batteryLevel = 0 
+			} else if (batteryLevel > 100) {
+				batteryLevel = 100 
+			}
+			
 			batteryPercentageEventHandler(batteryLevel)
 		}
 	}
