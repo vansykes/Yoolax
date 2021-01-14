@@ -15,7 +15,7 @@ import groovy.json.JsonOutput
 import physicalgraph.zigbee.zcl.DataType
 
 metadata {
-	definition(name: "ORVIBO Window Shades", namespace: "avianwaves", author: "AvianWaves", ocfDeviceType: "oic.d.blind", mnmn: "SmartThings", vid: "generic-shade-3") {
+	definition(name: "ORVIBO/Yooksmart/Yoolax Zigbee Window Shades", namespace: "avianwaves", author: "AvianWaves", ocfDeviceType: "oic.d.blind", mnmn: "SmartThings", vid: "generic-shade-3") {
 		capability "Actuator"
 		capability "Battery"
 		capability "Configuration"
@@ -29,7 +29,8 @@ metadata {
 
 		fingerprint manufacturer: "IKEA of Sweden", model: "KADRILJ roller blind", deviceJoinName: "IKEA Window Treatment" // raw description 01 0104 0202 00 09 0000 0001 0003 0004 0005 0020 0102 1000 FC7C 02 0019 1000 //IKEA KADRILJ Blinds
 		fingerprint manufacturer: "IKEA of Sweden", model: "FYRTUR block-out roller blind", deviceJoinName: "IKEA Window Treatment" // raw description 01 0104 0202 01 09 0000 0001 0003 0004 0005 0020 0102 1000 FC7C 02 0019 1000 //IKEA FYRTUR Blinds
-        fingerprint manufacturer: "ORVIBO", model: "Window Treatment", deviceJoinName: "ORVIBO Window Treatment" 
+				fingerprint manufacturer: "ORVIBO", model: "Window Treatment", deviceJoinName: "ORVIBO Window Treatment" 
+				fingerprint manufacturer: "yooksmart", model: "Window Treatment", deviceJoinName: "Yooksmart Window Treatment" 
 	}
 
 	preferences {
@@ -100,7 +101,7 @@ def installed() {
 def parse(String description) {
 	log.debug "description:- ${description}"
 	if (description?.startsWith("read attr -")) {
-	    sendEvent(name: "lastCheckin", value: now)
+			sendEvent(name: "lastCheckin", value: now)
 		Map descMap = zigbee.parseDescriptionAsMap(description)
 		if (isBindingTableMessage(description)) {
 			parseBindingTableMessage(description)
@@ -118,23 +119,25 @@ def parse(String description) {
 				levelEventHandler(newLevel)
 			}
 		} else if (!supportsLiftPercentage() && descMap?.clusterInt == zigbee.LEVEL_CONTROL_CLUSTER && descMap.value) {
-        	log.debug "Lift Percentage (raw): ${descMap?.value}"
+					log.debug "Lift Percentage (raw): ${descMap?.value}"
 			def valueInt = Math.round((zigbee.convertHexToInt(descMap.value)) / 255 * 100)
 			levelEventHandler(valueInt)
 		} else if (reportsBatteryPercentage() && descMap?.clusterInt == zigbee.POWER_CONFIGURATION_CLUSTER && zigbee.convertHexToInt(descMap?.attrId) == BATTERY_PERCENTAGE_REMAINING && descMap.value) {
-      log.debug "Battery (raw hex): 0x${descMap?.value}"
+			log.debug "Battery (raw hex): 0x${descMap?.value}"
 			
 			def batteryLevel = zigbee.convertHexToInt(descMap.value)
 			log.debug "Battery (raw dec): ${batteryLevel}"
 			
-			// By testing, battery level is a scale from ~50 to 200.  Not exactly sure what
-			// the lowest level is, so we account for going below zero.  Battery is VERY
-			// low in this case anyway.  Convert this to 0-100 scale.
-			batteryLevel = batteryLevel - 50
-			batteryLevel = batteryLevel * 100
-			batteryLevel = batteryLevel.intdiv(150)
+						if (isORVIBO() || isYooksmart()) {
+				// By testing, battery level is a scale from ~50 to 200.	Not exactly sure what
+				// the lowest level is, so we account for going below zero.	Battery is VERY
+				// low in this case anyway.	Convert this to 0-100 scale.
+				batteryLevel = batteryLevel - 50
+				batteryLevel = batteryLevel * 100
+				batteryLevel = batteryLevel.intdiv(150)
 			
-			log.debug "Battery (converted): ${batteryLevel} percent"
+				log.debug "Battery (ORVIBO/Yooksmart converted): ${batteryLevel} percent"
+						}
 			
 			if (batteryLevel < 0) { 
 				batteryLevel = 0 
@@ -150,8 +153,11 @@ def parse(String description) {
 def levelEventHandler(currentLevel) {
 	def lastLevel = device.currentValue("level")
 	log.debug "levelEventHandle - currentLevel: ${currentLevel} lastLevel: ${lastLevel}"
-	if (lastLevel == "undefined" || currentLevel == lastLevel) { //Ignore invalid reports
-		log.debug "Ignore invalid reports"
+	if (lastLevel == "undefined") {
+		log.debug "Ignoring invalid level reports."
+	} else if (lastLevel == currentLevel) {
+		log.debug "Level did not change."
+				runIn(getFinalLevelDelay(), "updateFinalState", [overwrite:true])
 	} else {
 		sendEvent(name: "level", value: currentLevel)
 		if (currentLevel == 0 || currentLevel == 100) {
@@ -162,13 +168,25 @@ def levelEventHandler(currentLevel) {
 			} else if (lastLevel > currentLevel) {
 				sendEvent([name:"windowShade", value: "closing"])
 			}
-			runIn(1, "updateFinalState", [overwrite:true])
+			runIn(getFinalLevelDelay(), "updateFinalState", [overwrite:true])
 		}
 	}
 }
 
 def updateFinalState() {
 	def level = device.currentValue("level")
+		
+		if (isYooksmart()) {
+			// Account for "close to open" or "close to closed" states
+				if (level >= 99) {
+					log.debug "Yooksmart level normalization: ${level} adjusting to 100 (open)"
+					level = 100
+		} else if (level <= 1) {
+					log.debug "Yooksmart level normalization: ${level} adjusting to 0 (closed)"
+					level = 0
+				}
+		}
+		
 	log.debug "updateFinalState: ${level}"
 	if (level > 0 && level < 100) {
 		sendEvent(name: "windowShade", value: "partially open")
@@ -177,9 +195,9 @@ def updateFinalState() {
 
 def batteryPercentageEventHandler(batteryLevel) {
 	if (batteryLevel != null) {
-    	log.debug "Battery provided level: ${batteryLevel}"
+			log.debug "Battery provided level: ${batteryLevel}"
 		batteryLevel = Math.min(100, Math.max(0, batteryLevel))
-        log.debug "Battery min/max level: ${batteryLevel}"
+				log.debug "Battery min/max level: ${batteryLevel}"
 		sendEvent([name: "battery", value: batteryLevel, unit: "%", descriptionText: "{{ device.displayName }} battery was {{ value }}%"])
 	}
 }
@@ -198,9 +216,9 @@ def setLevel(data, rate = null) {
 	log.info "setLevel()"
 	def cmd
 	if (supportsLiftPercentage()) {
-		if (shouldInvertLiftPercentage()) {
-			// some devices keeps % level of being closed (instead of % level of being opened)
-			// inverting that logic is needed here
+		if (shouldInvertLiftPercentage() || isYooksmart()) {
+			// Some devices keeps % level of being closed (instead of % level of being opened) inverting that logic is needed here.
+						// Yooksmart motors are weird.	They report levels using non-inverted values, but you have to SET the level using inverted values.
 			data = 100 - data
 		}
 		cmd = zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_GOTO_LIFT_PERCENTAGE, zigbee.convertToHexString(data, 2))
@@ -220,7 +238,7 @@ def pause() {
 }
 
 def presetPosition() {
-    setLevel(preset ?: 50)
+		setLevel(preset ?: 50)
 }
 
 /**
@@ -240,13 +258,13 @@ def refresh() {
 	} else {
 		cmds = zigbee.readAttribute(zigbee.LEVEL_CONTROL_CLUSTER, ATTRIBUTE_CURRENT_LEVEL)
 	}
-    
-   	if (reportsBatteryPercentage()) {
+		
+	 	if (reportsBatteryPercentage()) {
 		cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, BATTERY_PERCENTAGE_REMAINING)
 	}
-    
-    log.debug "refresh cmd: ${cmds}"
-    
+		
+		log.debug "refresh cmd: ${cmds}"
+		
 	return cmds
 }
 
@@ -275,7 +293,7 @@ def configure() {
 }
 
 def usesLocalGroupBinding() {
-	isIkeaKadrilj() || isIkeaFyrtur() || isORVIBO()
+	isIkeaKadrilj() || isIkeaFyrtur() || isORVIBO() || isYooksmart()
 }
 
 private def parseBindingTableMessage(description) {
@@ -303,7 +321,7 @@ private List readDeviceBindingTable() {
 }
 
 def supportsLiftPercentage() {
-	isIkeaKadrilj() || isIkeaFyrtur() || isORVIBO()
+	isIkeaKadrilj() || isIkeaFyrtur() || isORVIBO() || isYooksmart()
 }
 
 def shouldInvertLiftPercentage() {
@@ -311,7 +329,7 @@ def shouldInvertLiftPercentage() {
 }
 
 def reportsBatteryPercentage() {
-	return isIkeaKadrilj() || isIkeaFyrtur() || isORVIBO()
+	return isIkeaKadrilj() || isIkeaFyrtur() || isORVIBO() || isYooksmart()
 }
 
 def isIkeaKadrilj() {
@@ -324,4 +342,18 @@ def isIkeaFyrtur() {
 
 def isORVIBO() {
 	device.getDataValue("manufacturer") == "ORVIBO"
+}
+
+def isYooksmart() {
+	device.getDataValue("manufacturer") == "yooksmart"
+}
+
+def getFinalLevelDelay() {
+	if (isORVIBO()) {
+		return 2
+	} else if (isYooksmart()) {
+		return 5
+	} else {
+		return 1
+	}
 }
