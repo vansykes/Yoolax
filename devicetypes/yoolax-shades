@@ -128,7 +128,16 @@ def parse(String description) {
 			def batteryLevel = zigbee.convertHexToInt(descMap.value)
 			log.debug "Battery (raw dec): ${batteryLevel}"
 			
-						if (isORVIBO() || isYooksmart()) {
+			if (isORVIBO()) {
+				// By testing, battery level is a scale from ~60 to 200.	Not exactly sure what
+				// the lowest level is, so we account for going below zero.	Battery is VERY
+				// low in this case anyway.	Convert this to 0-100 scale.
+				batteryLevel = batteryLevel - 60
+				batteryLevel = batteryLevel * 100
+				batteryLevel = batteryLevel.intdiv(140)
+			
+				log.debug "Battery (ORVIBO converted): ${batteryLevel} percent"
+			} else if (isYooksmart()) {
 				// By testing, battery level is a scale from ~50 to 200.	Not exactly sure what
 				// the lowest level is, so we account for going below zero.	Battery is VERY
 				// low in this case anyway.	Convert this to 0-100 scale.
@@ -136,8 +145,8 @@ def parse(String description) {
 				batteryLevel = batteryLevel * 100
 				batteryLevel = batteryLevel.intdiv(150)
 			
-				log.debug "Battery (ORVIBO/Yooksmart converted): ${batteryLevel} percent"
-						}
+				log.debug "Battery (Yooksmart converted): ${batteryLevel} percent"
+			}
 			
 			if (batteryLevel < 0) { 
 				batteryLevel = 0 
