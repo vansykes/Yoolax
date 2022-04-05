@@ -170,11 +170,11 @@ def levelEventHandler(currentLevel) {
 	} else {
 		sendEvent(name: "level", value: currentLevel)
 		if (currentLevel == 0 || currentLevel == 100) {
-			sendEvent(name: "windowShade", value: currentLevel == 0 ? "closed" : "open")
+			sendEvent(name: "windowShade", value: currentLevel == 100 ? "closed" : "open")
 		} else {
-			if (lastLevel < currentLevel) {
+			if (lastLevel > currentLevel) {
 				sendEvent([name:"windowShade", value: "opening"])
-			} else if (lastLevel > currentLevel) {
+			} else if (lastLevel < currentLevel) {
 				sendEvent([name:"windowShade", value: "closing"])
 			}
 			runIn(getFinalLevelDelay(), "updateFinalState", [overwrite:true])
@@ -213,12 +213,12 @@ def batteryPercentageEventHandler(batteryLevel) {
 
 def close() {
 	log.info "close()"
-	setLevel(0)
+	setLevel(100)
 }
 
 def open() {
 	log.info "open()"
-	setLevel(100)
+	setLevel(0)
 }
 
 def setLevel(data, rate = null) {
@@ -228,7 +228,7 @@ def setLevel(data, rate = null) {
 		if (shouldInvertLiftPercentage() || isYooksmart()) {
 			// Some devices keeps % level of being closed (instead of % level of being opened) inverting that logic is needed here.
 						// Yooksmart motors are weird.	They report levels using non-inverted values, but you have to SET the level using inverted values.
-			data = 100 - data
+			data = data
 		}
 		cmd = zigbee.command(CLUSTER_WINDOW_COVERING, COMMAND_GOTO_LIFT_PERCENTAGE, zigbee.convertToHexString(data, 2))
 	} else {
